@@ -42,13 +42,23 @@ class QwenClient:
 
         last_err: Optional[Exception] = None
         for attempt in range(2):
-            resp = self._client.chat.completions.create(
+            kwargs = dict(
                 model=self.model,
                 messages=[{"role": "system", "content": system},
                           {"role": "user", "content": user}],
                 temperature=0.2,
                 response_format={"type": "json_object"},
             )
+            try:
+                resp = self._client.chat.completions.create(**kwargs)
+            except Exception as e:
+                # some models reject response_format; the prompts already demand
+                # JSON-only replies, so retry without it before giving up
+                if "response_format" in str(e):
+                    kwargs.pop("response_format")
+                    resp = self._client.chat.completions.create(**kwargs)
+                else:
+                    raise
             text = resp.choices[0].message.content or ""
             try:
                 return _extract_json(text)
