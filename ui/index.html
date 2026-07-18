@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inspection Autopilot</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2127; --muted:#5f6b7c; --line:#d3d8de;
+          --urgent:#c5303c; --elevated:#c87619; --routine:#2d72d2; --ok:#238551; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { background:#10161d; color:#fff; padding:14px 22px; display:flex;
+           align-items:baseline; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  header .sub { color:#9aa5b1; font-size:12.5px; }
+  #mode { margin-left:auto; font-size:12px; padding:3px 10px; border-radius:99px;
+          background:#394b59; }
+  #mode.live { background:var(--ok); }
+  main { max-width:1060px; margin:20px auto; padding:0 16px; }
+  .bar { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  button { font:inherit; padding:7px 14px; border:1px solid var(--line); border-radius:6px;
+           background:var(--card); cursor:pointer; }
+  button.primary { background:#2d72d2; border-color:#2d72d2; color:#fff; font-weight:600; }
+  button:disabled { opacity:.5; cursor:default; }
+  .stats { color:var(--muted); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px;
+          padding:14px 16px; margin-bottom:12px; }
+  .row1 { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .tier { font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:2px 9px;
+          border-radius:99px; color:#fff; }
+  .tier.URGENT { background:var(--urgent); } .tier.ELEVATED { background:var(--elevated); }
+  .tier.ROUTINE { background:var(--routine); }
+  .fac { font-weight:600; }
+  .atype { font-family:Consolas, monospace; font-size:12.5px; color:var(--muted); }
+  .meta { color:var(--muted); font-size:12.5px; }
+  .rationale { margin:8px 0 0; }
+  .cites { margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:12.5px; }
+  .draft { margin-top:8px; background:#f1f3f5; border-left:3px solid var(--line);
+           padding:8px 12px; font-size:13px; white-space:pre-wrap; }
+  .actions { margin-top:10px; display:flex; gap:8px; }
+  .approve { border-color:var(--ok); color:var(--ok); font-weight:600; }
+  .reject { border-color:var(--urgent); color:var(--urgent); }
+  .status { font-size:12px; font-weight:600; }
+  .status.approved, .status.auto_approved { color:var(--ok); }
+  .status.rejected { color:var(--urgent); }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; }
+  .tabs button.active { background:#10161d; color:#fff; border-color:#10161d; }
+  .empty { color:var(--muted); text-align:center; padding:40px 0; }
+  #rules { font-size:12.5px; color:var(--muted); margin-bottom:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Inspection Autopilot</h1>
+  <span class="sub">Clayton County food safety &middot; Qwen triage &middot; human-approved actions</span>
+  <span id="mode">loading&hellip;</span>
+</header>
+<main>
+  <div class="bar">
+    <button class="primary" id="runBtn" onclick="runBatch()">Run agent on next 5 inspections</button>
+    <span class="stats" id="stats"></span>
+  </div>
+  <div id="rules"></div>
+  <div class="tabs">
+    <button id="tab-proposed" class="active" onclick="setTab('proposed')">Approval queue</button>
+    <button id="tab-all" onclick="setTab(null)">Action log</button>
+  </div>
+  <div id="list"><div class="empty">Loading&hellip;</div></div>
+</main>
+<script>
+let tab = 'proposed';
+async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+
+async function refresh() {
+  const h = await j('/api/health');
+  const m = document.getElementById('mode');
+  m.textContent = h.mode === 'live' ? ('LIVE: ' + h.model) : 'STUB MODE (no API key)';
+  m.className = h.mode;
+  const s = await j('/api/stats');
+  document.getElementById('stats').textContent =
+    `${s.proposals} proposals · ${s.pending} pending · ${s.human_decisions} human decisions · ${s.auto_approved} auto-approved by rule`;
+  const rl = await j('/api/rules');
+  document.getElementById('rules').textContent =
+    'Active automation rules: ' + rl.rules.map(r => r.name + ' (' + r.description + ')').join('  |  ');
+  const q = tab ? ('?status=' + tab) : '';
+  const data = await j('/api/proposals' + q);
+  render(data.proposals);
+}
+
+function esc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+
+function render(props) {
+  const el = document.getElementById('list');
+  if (!props.length) { el.innerHTML = '<div class="empty">Nothing here yet. Run the agent.</div>'; return; }
+  el.innerHTML = props.map(p => `
+    <div class="card">
+      <div class="row1">
+        <span class="tier ${p.risk_tier}">${p.risk_tier}</span>
+        <span class="fac">${esc(p.facility_name)}</span>
+        <span class="atype">${esc(p.action_type)}${p.params && p.params.window_days ? ' (' + p.params.window_days + ' days)' : ''}</span>
+        <span class="meta">insp #${p.inspection_id} · ${esc(p.source)}</span>
+        <span class="status ${p.status}" style="margin-left:auto">${p.status.replace('_',' ')}${p.decided_by ? ' · ' + esc(p.decided_by) : ''}</span>
+      </div>
+      <p class="rationale">${esc(p.rationale)}</p>
+      ${p.citations && p.citations.length ? '<ul class="cites">' + p.citations.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul>' : ''}
+      ${p.draft_text ? '<div class="draft">' + esc(p.draft_text) + '</div>' : ''}
+      ${p.status === 'proposed' ? `
+      <div class="actions">
+        <button class="approve" onclick="decide(${p.proposal_id}, 'approved')">Approve</button>
+        <button class="reject" onclick="decide(${p.proposal_id}, 'rejected')">Reject</button>
+      </div>` : ''}
+    </div>`).join('');
+}
+
+async function decide(id, decision) {
+  await j('/api/proposals/' + id + '/decide', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({decision, decided_by: 'supervisor'})});
+  refresh();
+}
+
+async function runBatch() {
+  const b = document.getElementById('runBtn');
+  b.disabled = true; b.textContent = 'Agent running…';
+  try { await j('/api/run?batch=5', {method: 'POST'}); }
+  finally { b.disabled = false; b.textContent = 'Run agent on next 5 inspections'; }
+  refresh();
+}
+
+function setTab(t) {
+  tab = t;
+  document.getElementById('tab-proposed').className = t === 'proposed' ? 'active' : '';
+  document.getElementById('tab-all').className = t === null ? 'active' : '';
+  refresh();
+}
+refresh();
+</script>
+</body>
+</html>
