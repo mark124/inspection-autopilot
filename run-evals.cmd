@@ -11,5 +11,5 @@ echo  Sabotage eval: deterministic fault injection (instant)
 echo ============================================================
 .venv\Scripts\python -m evals.eval_triage --sabotage 25
 echo.
-echo Done. Leave this window open for the recording.
-pause
+echo Done. Leave this window open for the recording. Press any key to close.
+pause >nul
