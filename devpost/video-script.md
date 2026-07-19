@@ -46,7 +46,7 @@ Target 2:45, hard ceiling 3:00. Beats 1-6 sync all three sections. Flub a line? 
 5. When the status line appears ("Triaged 5 ..."), point at it briefly.
 
 **Beat 3** (0:50-1:40)
-6. Scroll the queue to the **Golden Krust** letter card (red URGENT pill).
+6. Golden Krust's letter card (red URGENT pill) is ALREADY the first card at the top of the queue; it is pre-staged and does not depend on the Run click. Just scroll to the top if you moved.
 7. On "Score 71": point at the score in the rationale text.
 8. On "citation copied verbatim": run the cursor slowly down the cited violation bullets.
 9. On "It drafted the enforcement letter": point at the gray letter box, then the green badge below it.
@@ -82,7 +82,7 @@ Pre-flight:
 Per beat:
 - B1: three % tiles visible at top; LIVE badge top right
 - B2: Run button visible before click; status line after
-- B3: Golden Krust card shows URGENT pill, citations list, letter, green "letter cross-checked" badge; expect it in the newly arrived batch (if it lands ELEVATED, say "elevated" instead of "urgent"; everything else unchanged)
+- B3: Golden Krust is the FIRST card in the queue before you even start recording (URGENT pill, citations list, letter, green "letter cross-checked" badge). It is already triaged and stored; the Run click in Beat 2 only adds new cards below it.
 - B4: schedule tab shows Golden Krust with due date + address
 - B5: eval window shows both JSON reports, text readable at 1080p
 - B6: stat chips populated (proposals, pending, decisions, agreement); rules line visible
