@@ -10,9 +10,30 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger("autopilot.qwen")
+
+
+def _load_dotenv() -> None:
+    """Load KEY=VALUE lines from a repo-root .env if present.
+
+    Real environment variables always win (setdefault), so container/CI
+    deployments are unaffected; this only spares local shells the export step.
+    """
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
 
 DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 DEFAULT_MODEL = "qwen-plus"
