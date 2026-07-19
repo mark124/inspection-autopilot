@@ -23,6 +23,19 @@ Goal: backend running on Alibaba Cloud + a code file proving use of Alibaba Clou
 
 Known gotcha from previous deploys: `docker restart` does not re-read env vars. To rotate the key: `docker rm -f autopilot` then `docker run` again.
 
+## Updating a running deployment
+
+Re-run the same two lines from the web terminal (export the key, then `curl ... | bash`). The bootstrap script re-clones main, rebuilds, and swaps the container.
+
+## Resetting demo state
+
+The append-only DB lives inside the container. To re-arm the demo (empty queue, fresh stats):
+```bash
+sudo docker rm -f autopilot && sudo docker run -d --name autopilot --restart unless-stopped \
+  -p 8080:8080 -e DASHSCOPE_API_KEY=sk-... autopilot
+```
+Do this right before recording the video so the take starts clean.
+
 ## Option B: Function Compute (custom container)
 Works with the same Dockerfile (listens on 8080, stateless enough for demo purposes; SQLite resets on cold start, acceptable for judging but say so honestly in the demo). Prefer Option A because the append-only log surviving across requests is part of the story.
 
