@@ -1,0 +1,14 @@
+{
+  "mode": "sabotage (deterministic fault injection, no model calls)",
+  "n_inspections": 25,
+  "forged_citations_injected": 50,
+  "forged_citations_caught": 50,
+  "legitimate_citations": 75,
+  "legitimate_citations_preserved": 75,
+  "forgery_classes": [
+    "invented item code+text",
+    "real item text from a different inspection"
+  ],
+  "misses": [],
+  "pass": true
+}

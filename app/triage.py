@@ -1,11 +1,14 @@
-"""Agent pipeline: fact sheet -> risk triage -> drafted actions.
+"""Agent pipeline: fact sheet -> risk triage -> drafted actions -> letter lint.
 
 Every agent judgment must cite violation items that actually appear in the
 fact sheet; citations are validated in code and invalid ones are dropped
-(and counted, so evals can report hallucination rate honestly).
+(and counted, so evals can report the hallucination rate honestly). Drafted
+letters are additionally cross-checked by a deterministic linter that verifies
+every violation code the letter names against the official record.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from .qwen import QwenClient
@@ -14,10 +17,14 @@ from .store import SourceData
 
 TRIAGE_SYSTEM = """You are a food-safety triage assistant for a county environmental health office.
 You read one inspection fact sheet and classify follow-up risk. You never invent facts:
-every claim in your rationale must reference violations or history lines from the fact sheet.
+every claim in your rationale must come from the fact sheet (its violations, score,
+or prior-inspection history).
 Reply with ONLY a JSON object: {"risk_tier": "URGENT"|"ELEVATED"|"ROUTINE",
 "rationale": "<2-4 sentences grounded in the fact sheet>",
 "citations": ["<exact violation item text copied from the fact sheet>", ...]}
+The citations array must contain ONLY violation item texts copied exactly from the
+VIOLATIONS section. If VIOLATIONS is (none), return "citations": [] and ground the
+rationale in the score and prior-inspection history (prose only, never in citations).
 Guidance: URGENT = imminent-health-hazard patterns (score below 70, or multiple uncorrected
 priority violations, or repeat priority violations). ELEVATED = priority violations present,
 declining scores, or repeat/uncorrected items that need a scheduled recheck.
@@ -35,6 +42,10 @@ ELEVATED gets schedule_reinspection or follow_up_letter as facts warrant.
 ROUTINE gets acknowledge only. Never invent violations not on the fact sheet.
 Reply with ONLY a JSON object: {"actions": [{"action_type": "...", "params": {...},
 "draft_text": "...", "rationale": "<1-2 sentences>"}, ...]}"""
+
+# every real violation item is 26+ chars; this blocks one-word "citations"
+# while still accepting any substantial verbatim fragment
+_MIN_FRAGMENT_CHARS = 20
 
 
 def build_fact_sheet(insp: Inspection, source: SourceData) -> str:
@@ -68,6 +79,68 @@ def build_fact_sheet(insp: Inspection, source: SourceData) -> str:
     for h in history:
         lines.append(f"  - {h.date}: score {h.score}, {h.n_violations} violations ({h.purpose})")
     return "\n".join(lines)
+
+
+def _norm(s: str) -> str:
+    return " ".join(s.lower().split())
+
+
+def validate_citations(citations, viols: list[Violation]) -> tuple[list[str], int]:
+    """Keep only citations that verbatim-match a violation item.
+
+    Accepted: the exact item, an item quoted inside a longer citation, or a
+    verbatim fragment of at least _MIN_FRAGMENT_CHARS. Everything else
+    (empty strings, generic words, non-strings, invented items) is dropped
+    and counted toward the hallucination metric.
+    """
+    if isinstance(citations, str):
+        citations = [citations]
+    if not isinstance(citations, list):
+        citations = []
+    real = {_norm(v.item) for v in viols}
+    kept, dropped = [], 0
+    for c in citations:
+        c_norm = _norm(c) if isinstance(c, str) else ""
+        if c_norm and (
+                c_norm in real
+                or any(r in c_norm for r in real)
+                or (len(c_norm) >= _MIN_FRAGMENT_CHARS and any(c_norm in r for r in real))):
+            kept.append(c)
+        else:
+            dropped += 1
+    return kept, dropped
+
+
+_CODE_RE = re.compile(r"\b\d{1,2}-\d[a-z]?\b|\b\d{1,2}[a-z]\b", re.IGNORECASE)
+
+
+def lint_letter(draft_text: str, viols: list[Violation]) -> Optional[dict]:
+    """Deterministic cross-check: every violation code the letter names must
+    exist in this inspection's official record. Returns None for empty drafts.
+    """
+    if not draft_text.strip():
+        return None
+    real_items = [_norm(v.item) for v in viols]
+    real_codes = {m.group(0).lower() for item in real_items for m in _CODE_RE.finditer(item)}
+    named = {m.group(0).lower() for m in _CODE_RE.finditer(_norm(draft_text))}
+    unmatched = sorted(c for c in named if c not in real_codes)
+    return {"codes_named": len(named), "codes_matched": len(named) - len(unmatched),
+            "unmatched_codes": unmatched}
+
+
+def _clean_params(action_type: str, params: dict) -> dict:
+    """Enforce in code what the prompt promises (window_days is an int 3-30)."""
+    if not isinstance(params, dict):
+        return {}
+    if action_type == "schedule_reinspection":
+        try:
+            w = int(params.get("window_days", 14))
+        except (TypeError, ValueError):
+            w = 14
+        params["window_days"] = max(3, min(30, w))
+    else:
+        params.pop("window_days", None)
+    return params
 
 
 def _stub_triage(insp: Inspection, viols: list[Violation]) -> dict:
@@ -107,19 +180,6 @@ def _stub_actions(tier: str, insp: Inspection, viols: list[Violation]) -> dict:
     return {"actions": acts}
 
 
-def validate_citations(citations: list[str], viols: list[Violation]) -> tuple[list[str], int]:
-    """Keep only citations that match a real violation item; return (kept, dropped_count)."""
-    real = {v.item.strip().lower() for v in viols}
-    kept, dropped = [], 0
-    for c in citations:
-        c_norm = c.strip().lower()
-        if c_norm in real or any(c_norm in r or r in c_norm for r in real):
-            kept.append(c)
-        else:
-            dropped += 1
-    return kept, dropped
-
-
 def run_inspection(insp: Inspection, source: SourceData, client: QwenClient
                    ) -> tuple[TriageResult, list[ActionDraft], int]:
     """Triage one inspection and draft actions. Returns (triage, actions, dropped_citations)."""
@@ -130,19 +190,28 @@ def run_inspection(insp: Inspection, source: SourceData, client: QwenClient
     tier = raw.get("risk_tier", "ELEVATED")
     if tier not in ("URGENT", "ELEVATED", "ROUTINE"):
         tier = "ELEVATED"
-    kept, dropped = validate_citations(list(raw.get("citations", [])), viols)
+    kept, dropped = validate_citations(raw.get("citations") or [], viols)
     triage = TriageResult(risk_tier=tier, rationale=str(raw.get("rationale", "")), citations=kept)
 
     raw_actions = client.complete_json(
         ACTION_SYSTEM,
         f"{sheet}\n\nASSIGNED RISK TIER: {triage.risk_tier}",
         stub_payload=_stub_actions(triage.risk_tier, insp, viols))
+    raw_list = raw_actions.get("actions") or []
+    if not isinstance(raw_list, list):
+        raw_list = []
     actions: list[ActionDraft] = []
-    for a in raw_actions.get("actions", []):
+    for a in raw_list:
         try:
-            actions.append(ActionDraft(**a))
+            act = ActionDraft(**a)
         except Exception:
-            continue  # malformed action from the model; counted implicitly by evals
+            continue  # malformed action dropped; the eval's tier-action consistency check surfaces the gap
+        act.params = _clean_params(act.action_type, act.params)
+        if act.action_type == "follow_up_letter":
+            lint = lint_letter(act.draft_text, viols)
+            if lint is not None:
+                act.params["letter_lint"] = lint
+        actions.append(act)
     if not actions:
         actions = [ActionDraft(action_type="acknowledge", rationale="fallback: no valid actions returned")]
     return triage, actions, dropped

@@ -1,0 +1,32 @@
+{
+  "mode": "live",
+  "model": "qwen-plus",
+  "n_inspections": 50,
+  "n_dangerous_checked": 28,
+  "tier_distribution": {
+    "URGENT": 13,
+    "ELEVATED": 33,
+    "ROUTINE": 4
+  },
+  "citation_hallucination_rate": 0.0,
+  "citations_checked": 126,
+  "citations_dropped": 0,
+  "safety_floor_misses": [],
+  "tier_action_consistency_misses": [],
+  "pass": true,
+  "heuristic_baseline_agreement": 0.64,
+  "tier_confusion_live_x_heuristic": {
+    "ELEVATED": {
+      "ELEVATED": 20,
+      "ROUTINE": 6,
+      "URGENT": 7
+    },
+    "URGENT": {
+      "URGENT": 8,
+      "ELEVATED": 5
+    },
+    "ROUTINE": {
+      "ROUTINE": 4
+    }
+  }
+}

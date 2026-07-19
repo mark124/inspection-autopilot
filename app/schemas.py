@@ -42,6 +42,12 @@ class Facility(BaseModel):
     permit_number: str = ""
 
 
+class DecideBody(BaseModel):
+    decision: Literal["approved", "rejected"]
+    decided_by: str = Field(default="supervisor", min_length=1, max_length=40,
+                            pattern=r"^[A-Za-z0-9 ._-]+$")
+
+
 class TriageResult(BaseModel):
     risk_tier: RiskTier
     rationale: str

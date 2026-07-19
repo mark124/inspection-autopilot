@@ -1,0 +1,28 @@
+{
+  "model": "qwen-plus",
+  "n_pairs_triaged": 350,
+  "n_pairs_available": 1024,
+  "sampling": "deterministic systematic by inspection_id",
+  "outcome_definition": "next inspection of same facility has score < 85 or any priority violation",
+  "base_bad_rate": 0.486,
+  "tiers": {
+    "ELEVATED": {
+      "n": 223,
+      "next_inspection_bad_rate": 0.565
+    },
+    "ROUTINE": {
+      "n": 90,
+      "next_inspection_bad_rate": 0.211
+    },
+    "URGENT": {
+      "n": 37,
+      "next_inspection_bad_rate": 0.676
+    }
+  },
+  "triage_failures_fallback_elevated": 0,
+  "tokens": {
+    "input": 141182,
+    "output": 53702
+  },
+  "runtime_seconds": 296
+}

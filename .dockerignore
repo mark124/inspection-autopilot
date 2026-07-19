@@ -1,0 +1,9 @@
+.git
+.env
+.venv
+autopilot.db
+__pycache__
+**/__pycache__
+.pytest_cache
+devpost/
+docs/

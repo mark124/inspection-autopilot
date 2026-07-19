@@ -18,12 +18,26 @@
           background:#394b59; }
   #mode.live { background:var(--ok); }
   main { max-width:1060px; margin:20px auto; padding:0 16px; }
-  .bar { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  .outcomes { display:none; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .otile { flex:1 1 180px; background:var(--card); border:1px solid var(--line);
+           border-radius:8px; padding:10px 14px; }
+  .otile .big { font-size:22px; font-weight:700; }
+  .otile.URGENT .big { color:var(--urgent); } .otile.ELEVATED .big { color:var(--elevated); }
+  .otile.ROUTINE .big { color:var(--routine); }
+  .otile .lbl { font-size:12px; color:var(--muted); }
+  .ocap { flex-basis:100%; font-size:12px; color:var(--muted); margin-top:-4px; }
+  .bar { display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
   button { font:inherit; padding:7px 14px; border:1px solid var(--line); border-radius:6px;
            background:var(--card); cursor:pointer; }
   button.primary { background:#2d72d2; border-color:#2d72d2; color:#fff; font-weight:600; }
   button:disabled { opacity:.5; cursor:default; }
   .stats { color:var(--muted); font-size:13px; }
+  #err { display:none; background:#fdecea; border:1px solid var(--urgent); color:var(--urgent);
+         border-radius:6px; padding:8px 12px; margin-bottom:12px; cursor:pointer; font-size:13px; }
+  .chips { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:99px;
+          font-size:12px; color:var(--muted); padding:3px 12px; }
+  .chip b { color:var(--ink); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px;
           padding:14px 16px; margin-bottom:12px; }
   .row1 { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -38,16 +52,29 @@
   .cites { margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:12.5px; }
   .draft { margin-top:8px; background:#f1f3f5; border-left:3px solid var(--line);
            padding:8px 12px; font-size:13px; white-space:pre-wrap; }
+  .lint { display:inline-block; margin-top:8px; font-size:12px; font-weight:600;
+          padding:2px 10px; border-radius:99px; }
+  .lint.ok { background:#e5f2ec; color:var(--ok); }
+  .lint.warn { background:#fbeee0; color:var(--elevated); }
+  .record summary { cursor:pointer; margin-top:8px; }
   .actions { margin-top:10px; display:flex; gap:8px; }
   .approve { border-color:var(--ok); color:var(--ok); font-weight:600; }
   .reject { border-color:var(--urgent); color:var(--urgent); }
   .status { font-size:12px; font-weight:600; }
   .status.approved, .status.auto_approved { color:var(--ok); }
   .status.rejected { color:var(--urgent); }
-  .tabs { display:flex; gap:4px; margin-bottom:14px; }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; }
   .tabs button.active { background:#10161d; color:#fff; border-color:#10161d; }
   .empty { color:var(--muted); text-align:center; padding:40px 0; }
   #rules { font-size:12.5px; color:var(--muted); margin-bottom:14px; }
+  .dayhead { font-weight:700; margin:16px 0 8px; }
+  .srow { display:flex; gap:10px; align-items:center; background:var(--card);
+          border:1px solid var(--line); border-radius:8px; padding:9px 14px; margin-bottom:8px;
+          flex-wrap:wrap; }
+  .srow .addr { color:var(--muted); font-size:12.5px; }
+  .srow .due { margin-left:auto; font-size:12.5px; color:var(--muted); }
+  .srow.overdue { border-color:var(--urgent); }
+  .srow.overdue .due { color:var(--urgent); font-weight:700; }
 </style>
 </head>
 <body>
@@ -57,38 +84,91 @@
   <span id="mode">loading&hellip;</span>
 </header>
 <main>
+  <div class="outcomes" id="outcomes"></div>
   <div class="bar">
     <button class="primary" id="runBtn" onclick="runBatch()">Run agent on next 5 inspections</button>
-    <span class="stats" id="stats"></span>
+    <span class="stats" id="runStatus"></span>
   </div>
+  <div id="err" onclick="this.style.display='none'" title="click to dismiss"></div>
+  <div class="chips" id="chips"></div>
   <div id="rules"></div>
   <div class="tabs">
     <button id="tab-proposed" class="active" onclick="setTab('proposed')">Approval queue</button>
-    <button id="tab-all" onclick="setTab(null)">Action log</button>
+    <button id="tab-schedule" onclick="setTab('schedule')">Re-inspection schedule</button>
+    <button id="tab-all" onclick="setTab('all')">Action log</button>
   </div>
   <div id="list"><div class="empty">Loading&hellip;</div></div>
 </main>
 <script>
 let tab = 'proposed';
-async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); }
 
-async function refresh() {
-  const h = await j('/api/health');
-  const m = document.getElementById('mode');
-  m.textContent = h.mode === 'live' ? ('LIVE: ' + h.model) : 'STUB MODE (no API key)';
-  m.className = h.mode;
-  const s = await j('/api/stats');
-  document.getElementById('stats').textContent =
-    `${s.proposals} proposals · ${s.pending} pending · ${s.human_decisions} human decisions · ${s.auto_approved} auto-approved by rule`;
-  const rl = await j('/api/rules');
-  document.getElementById('rules').textContent =
-    'Active automation rules: ' + rl.rules.map(r => r.name + ' (' + r.description + ')').join('  |  ');
-  const q = tab ? ('?status=' + tab) : '';
-  const data = await j('/api/proposals' + q);
-  render(data.proposals);
+async function j(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let msg = await r.text();
+    try { msg = JSON.parse(msg).detail || msg; } catch (_) {}
+    const e = new Error(msg); e.status = r.status; throw e;
+  }
+  return r.json();
 }
 
 function esc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+function showError(m) { const e = document.getElementById('err'); e.textContent = String(m).slice(0, 300); e.style.display = 'block'; }
+function note(t) { const m = document.getElementById('runStatus'); m.textContent = t; if (t) setTimeout(() => { if (m.textContent === t) m.textContent = ''; }, 8000); }
+
+async function loadOutcomes() {
+  try {
+    const o = await j('/api/outcomes');
+    const el = document.getElementById('outcomes');
+    const tiers = ['URGENT', 'ELEVATED', 'ROUTINE'];
+    el.innerHTML = tiers.map(t => {
+      const d = o.tiers[t]; if (!d) return '';
+      return `<div class="otile ${t}"><div class="big">${Math.round(d.next_inspection_bad_rate * 100)}%</div>
+        <div class="lbl">of ${t} facilities failed their next real inspection (n=${d.n})</div></div>`;
+    }).join('') + `<div class="ocap">Outcome backtest: agent tiers vs the county's own history
+      (${o.n_pairs_triaged} real next-inspection pairs, base failure rate ${Math.round(o.base_bad_rate * 100)}%, live ${esc(o.model)}).</div>`;
+    el.style.display = 'flex';
+  } catch (_) { /* backtest not generated yet */ }
+}
+
+async function refresh() {
+  try {
+    const h = await j('/api/health');
+    const m = document.getElementById('mode');
+    m.textContent = h.mode === 'live' ? ('LIVE: ' + h.model) : 'STUB MODE (no API key)';
+    m.className = h.mode;
+    const s = await j('/api/stats');
+    const agree = s.agreement_rate == null ? 'n/a' : Math.round(s.agreement_rate * 100) + '%';
+    document.getElementById('chips').innerHTML =
+      `<span class="chip"><b>${s.proposals}</b> proposals</span>` +
+      `<span class="chip"><b>${s.pending}</b> pending review</span>` +
+      `<span class="chip"><b>${s.human_decisions}</b> human decisions</span>` +
+      `<span class="chip"><b>${s.auto_approved}</b> auto-approved by rule</span>` +
+      `<span class="chip">human agreement <b>${agree}</b></span>` +
+      `<span class="chip">citations dropped by validator <b>${s.citations_dropped}</b></span>`;
+    const rl = await j('/api/rules');
+    document.getElementById('rules').textContent =
+      'Active automation rules: ' + rl.rules.map(r => r.name + ' (' + r.description + ')').join('  |  ');
+    if (tab === 'schedule') {
+      renderSchedule((await j('/api/schedule')).schedule);
+    } else {
+      const q = tab === 'proposed' ? '?status=proposed' : '';
+      render((await j('/api/proposals' + q)).proposals);
+    }
+  } catch (e) {
+    showError('Could not load data: ' + e.message);
+    const el = document.getElementById('list');
+    if (el.querySelector('.empty')) el.innerHTML = '<div class="empty">Failed to load. Check the server and reload.</div>';
+  }
+}
+
+function lintBadge(p) {
+  const l = p.params && p.params.letter_lint;
+  if (!l) return '';
+  if (l.unmatched_codes && l.unmatched_codes.length)
+    return `<span class="lint warn">letter check: names ${esc(l.unmatched_codes.join(', '))} not in this record</span>`;
+  return `<span class="lint ok">letter cross-checked: ${l.codes_matched}/${l.codes_named} named violations in record</span>`;
+}
 
 function render(props) {
   const el = document.getElementById('list');
@@ -98,13 +178,18 @@ function render(props) {
       <div class="row1">
         <span class="tier ${p.risk_tier}">${p.risk_tier}</span>
         <span class="fac">${esc(p.facility_name)}</span>
-        <span class="atype">${esc(p.action_type)}${p.params && p.params.window_days ? ' (' + p.params.window_days + ' days)' : ''}</span>
+        <span class="atype">${esc(p.action_type)}${p.params && Number(p.params.window_days) ? ' (' + Number(p.params.window_days) + ' days)' : ''}</span>
         <span class="meta">insp #${p.inspection_id} · ${esc(p.source)}</span>
         <span class="status ${p.status}" style="margin-left:auto">${p.status.replace('_',' ')}${p.decided_by ? ' · ' + esc(p.decided_by) : ''}</span>
       </div>
       <p class="rationale">${esc(p.rationale)}</p>
       ${p.citations && p.citations.length ? '<ul class="cites">' + p.citations.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul>' : ''}
       ${p.draft_text ? '<div class="draft">' + esc(p.draft_text) + '</div>' : ''}
+      ${lintBadge(p)}
+      <details class="record" ontoggle="if(this.open && !this.dataset.loaded) loadRecord(this, ${p.inspection_id})">
+        <summary class="meta">Source inspection record (what the agent read)</summary>
+        <pre class="draft">loading&hellip;</pre>
+      </details>
       ${p.status === 'proposed' ? `
       <div class="actions">
         <button class="approve" onclick="decide(${p.proposal_id}, 'approved')">Approve</button>
@@ -113,27 +198,67 @@ function render(props) {
     </div>`).join('');
 }
 
+async function loadRecord(el, id) {
+  el.dataset.loaded = '1';
+  try {
+    const d = await j('/api/inspections/' + id + '/record');
+    el.querySelector('pre').textContent = d.text;
+  } catch (e) { el.querySelector('pre').textContent = 'record unavailable'; }
+}
+
+function renderSchedule(rows) {
+  const el = document.getElementById('list');
+  if (!rows.length) { el.innerHTML = '<div class="empty">No approved re-inspections yet. Approve one in the queue and it lands here as a dated work order.</div>'; return; }
+  const today = new Date().toISOString().slice(0, 10);
+  let html = '', lastDay = '';
+  for (const r of rows) {
+    if (r.due_date !== lastDay) { lastDay = r.due_date; html += `<div class="dayhead">Due ${esc(r.due_date)}</div>`; }
+    html += `<div class="srow${r.due_date < today ? ' overdue' : ''}">
+      <span class="tier ${r.risk_tier}">${r.risk_tier}</span>
+      <span class="fac">${esc(r.facility_name)}</span>
+      <span class="addr">${esc(r.address)}</span>
+      <span class="due">${r.window_days}-day window · ${esc(r.approved_by)}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
 async function decide(id, decision) {
-  await j('/api/proposals/' + id + '/decide', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({decision, decided_by: 'supervisor'})});
+  try {
+    await j('/api/proposals/' + id + '/decide', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({decision, decided_by: 'supervisor'})});
+  } catch (e) {
+    if (e.status === 409) note('Already decided by another supervisor; refreshing.');
+    else showError('Decision not recorded: ' + e.message);
+  }
   refresh();
 }
 
 async function runBatch() {
   const b = document.getElementById('runBtn');
   b.disabled = true; b.textContent = 'Agent running…';
-  try { await j('/api/run?batch=5', {method: 'POST'}); }
-  finally { b.disabled = false; b.textContent = 'Run agent on next 5 inspections'; }
+  try {
+    const r = await j('/api/run?batch=5', {method: 'POST'});
+    if (r.n_errors) note(`${r.n_errors} inspection(s) hit a model error; the rest were queued. Click again to retry.`);
+    else if (!r.processed.length) note('All inspections have been triaged. Browse the queue, schedule, and action log.');
+    else note(`Triaged ${r.processed.length} inspections · ${r.remaining} remaining`);
+  } catch (e) {
+    if (e.status === 409 || e.status === 429) note(e.message);
+    else showError('Agent run failed: ' + e.message);
+  } finally {
+    b.disabled = false; b.textContent = 'Run agent on next 5 inspections';
+  }
   refresh();
 }
 
 function setTab(t) {
   tab = t;
-  document.getElementById('tab-proposed').className = t === 'proposed' ? 'active' : '';
-  document.getElementById('tab-all').className = t === null ? 'active' : '';
+  for (const id of ['proposed', 'schedule', 'all'])
+    document.getElementById('tab-' + id).className = (t === id) ? 'active' : '';
   refresh();
 }
+loadOutcomes();
 refresh();
 </script>
 </body>

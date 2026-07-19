@@ -7,16 +7,19 @@ UI, so the whole approval workflow is testable offline. Demos use live mode.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Optional
+
+log = logging.getLogger("autopilot.qwen")
 
 DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 DEFAULT_MODEL = "qwen-plus"
 
 
 class QwenError(RuntimeError):
-    pass
+    """Any failure to obtain a valid JSON completion from the model backend."""
 
 
 class QwenClient:
@@ -27,7 +30,9 @@ class QwenClient:
         self._client = None
         if self.api_key:
             from openai import OpenAI
-            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            # bounded timeout: a hung provider connection must never wedge the UI
+            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url,
+                                  timeout=45.0, max_retries=1)
 
     @property
     def mode(self) -> str:
@@ -50,20 +55,25 @@ class QwenClient:
                 response_format={"type": "json_object"},
             )
             try:
-                resp = self._client.chat.completions.create(**kwargs)
-            except Exception as e:
-                # some models reject response_format; the prompts already demand
-                # JSON-only replies, so retry without it before giving up
-                if "response_format" in str(e):
-                    kwargs.pop("response_format")
+                try:
                     resp = self._client.chat.completions.create(**kwargs)
-                else:
-                    raise
+                except Exception as e:
+                    # some models reject response_format; the prompts already demand
+                    # JSON-only replies, so retry once without it before giving up
+                    if "response_format" in str(e):
+                        log.warning("model rejected response_format; retrying without it")
+                        kwargs.pop("response_format")
+                        resp = self._client.chat.completions.create(**kwargs)
+                    else:
+                        raise
+            except Exception as e:
+                raise QwenError(f"model backend error: {e}") from e
             text = resp.choices[0].message.content or ""
             try:
                 return _extract_json(text)
             except ValueError as e:
                 last_err = e
+                log.warning("invalid JSON from model (attempt %d): %s", attempt + 1, e)
                 user = user + "\n\nYour previous reply was not valid JSON. Reply with ONLY a JSON object."
         raise QwenError(f"model returned invalid JSON twice: {last_err}")
 

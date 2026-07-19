@@ -111,9 +111,14 @@ class ProposalStore:
                     mode TEXT NOT NULL,
                     model TEXT NOT NULL,
                     n_inspections INTEGER NOT NULL,
-                    n_proposals INTEGER NOT NULL
+                    n_proposals INTEGER NOT NULL,
+                    n_dropped_citations INTEGER NOT NULL DEFAULT 0
                 );
             """)
+            try:  # migrate DBs created before the column existed
+                c.execute("ALTER TABLE runs ADD COLUMN n_dropped_citations INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -136,10 +141,10 @@ class ProposalStore:
 
     def decide(self, proposal_id: int, decision: str, decided_by: str) -> bool:
         with _lock, self._conn() as c:
-            row = c.execute("SELECT proposal_id FROM proposals WHERE proposal_id=?",
+            row = c.execute("SELECT auto_approved FROM proposals WHERE proposal_id=?",
                             (proposal_id,)).fetchone()
-            if row is None:
-                return False
+            if row is None or row["auto_approved"]:
+                return False  # unknown, or already decided by rule
             existing = c.execute("SELECT decision_id FROM decisions WHERE proposal_id=?",
                                  (proposal_id,)).fetchone()
             if existing is not None:
@@ -148,10 +153,18 @@ class ProposalStore:
                       " VALUES (?,?,?,?)", (proposal_id, decision, decided_by, _now()))
             return True
 
-    def record_run(self, mode: str, model: str, n_inspections: int, n_proposals: int) -> None:
+    def record_run(self, mode: str, model: str, n_inspections: int, n_proposals: int,
+                   n_dropped_citations: int = 0) -> None:
         with _lock, self._conn() as c:
-            c.execute("INSERT INTO runs (started_at, mode, model, n_inspections, n_proposals)"
-                      " VALUES (?,?,?,?,?)", (_now(), mode, model, n_inspections, n_proposals))
+            c.execute("INSERT INTO runs (started_at, mode, model, n_inspections, n_proposals,"
+                      " n_dropped_citations) VALUES (?,?,?,?,?,?)",
+                      (_now(), mode, model, n_inspections, n_proposals, n_dropped_citations))
+
+    def runs_today(self) -> int:
+        with self._conn() as c:
+            today = _now()[:10]
+            return c.execute("SELECT COUNT(*) n FROM runs WHERE started_at LIKE ?",
+                             (today + "%",)).fetchone()["n"]
 
     def processed_inspection_ids(self) -> set[int]:
         with self._conn() as c:
@@ -190,6 +203,20 @@ class ProposalStore:
             n_p = c.execute("SELECT COUNT(*) n FROM proposals").fetchone()["n"]
             n_d = c.execute("SELECT COUNT(*) n FROM decisions").fetchone()["n"]
             n_auto = c.execute("SELECT COUNT(*) n FROM proposals WHERE auto_approved=1").fetchone()["n"]
+            # derived, never negative, self-healing against any stray decision rows
+            pending = c.execute(
+                "SELECT COUNT(*) n FROM proposals p WHERE p.auto_approved=0 AND NOT EXISTS"
+                " (SELECT 1 FROM decisions d WHERE d.proposal_id=p.proposal_id)").fetchone()["n"]
             runs = c.execute("SELECT COUNT(*) n FROM runs").fetchone()["n"]
+            approved = c.execute("SELECT COUNT(*) n FROM decisions WHERE decision='approved'").fetchone()["n"]
+            rejected = c.execute("SELECT COUNT(*) n FROM decisions WHERE decision='rejected'").fetchone()["n"]
+            dropped = c.execute("SELECT COALESCE(SUM(n_dropped_citations),0) n FROM runs").fetchone()["n"]
+            tier_rows = c.execute(
+                "SELECT risk_tier, COUNT(DISTINCT inspection_id) n FROM proposals GROUP BY risk_tier").fetchall()
+        agreement = round(approved / (approved + rejected), 3) if (approved + rejected) else None
         return {"proposals": n_p, "human_decisions": n_d, "auto_approved": n_auto,
-                "pending": n_p - n_d - n_auto, "runs": runs}
+                "pending": pending, "runs": runs,
+                "approved": approved, "rejected": rejected,
+                "agreement_rate": agreement,
+                "citations_dropped": dropped,
+                "tiers": {r["risk_tier"]: r["n"] for r in tier_rows}}
