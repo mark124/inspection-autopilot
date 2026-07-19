@@ -46,7 +46,8 @@
   .tier.URGENT { background:var(--urgent); } .tier.ELEVATED { background:var(--elevated); }
   .tier.ROUTINE { background:var(--routine); }
   .fac { font-weight:600; }
-  .atype { font-family:Consolas, monospace; font-size:12.5px; color:var(--muted); }
+  .atype { font-family:Consolas, monospace; font-size:12px; color:var(--ink);
+           background:#eef1f4; border:1px solid var(--line); border-radius:5px; padding:1px 8px; }
   .meta { color:var(--muted); font-size:12.5px; }
   .rationale { margin:8px 0 0; }
   .cites { margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:12.5px; }
@@ -166,8 +167,8 @@ function lintBadge(p) {
   const l = p.params && p.params.letter_lint;
   if (!l) return '';
   if (l.unmatched_codes && l.unmatched_codes.length)
-    return `<span class="lint warn">letter check: names ${esc(l.unmatched_codes.join(', '))} not in this record</span>`;
-  return `<span class="lint ok">letter cross-checked: ${l.codes_matched}/${l.codes_named} named violations in record</span>`;
+    return `<span class="lint warn">letter check: names code ${esc(l.unmatched_codes.join(', '))} NOT in this inspection's record</span>`;
+  return `<span class="lint ok">letter cross-checked: ${l.codes_matched}/${l.codes_named} violation codes verified against the record</span>`;
 }
 
 function render(props) {

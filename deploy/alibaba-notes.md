@@ -29,12 +29,13 @@ Re-run the same two lines from the web terminal (export the key, then `curl ... 
 
 ## Resetting demo state
 
-The append-only DB lives inside the container. To re-arm the demo (empty queue, fresh stats):
+The append-only DB lives inside the container. Quick reset with the existing image (empty queue, fresh stats):
 ```bash
 sudo docker rm -f autopilot && sudo docker run -d --name autopilot --restart unless-stopped \
   -p 8080:8080 -e DASHSCOPE_API_KEY=sk-... autopilot
 ```
-Do this right before recording the video so the take starts clean.
+
+Before recording the video, prefer the full bootstrap re-run instead (two lines from "Updating a running deployment"): it pulls the latest UI/code AND starts with a clean database in one step.
 
 ## Option B: Function Compute (custom container)
 Works with the same Dockerfile (listens on 8080, stateless enough for demo purposes; SQLite resets on cold start, acceptable for judging but say so honestly in the demo). Prefer Option A because the append-only log surviving across requests is part of the story.

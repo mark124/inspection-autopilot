@@ -6,6 +6,10 @@ Track 4 (Autopilot Agent), Global AI Hackathon Series with Qwen Cloud.
 
 **Live demo (Alibaba Cloud Singapore, live qwen-plus): http://47.82.181.199:8080** - click "Run agent" yourself; the approval queue, schedule, and trust metrics are all real.
 
+![Approval queue with outcome backtest tiles, trust strip, and a cited, letter-linted proposal](docs/img/approval-queue.png)
+
+An URGENT or ELEVATED inspection typically yields two separate proposals, a re-inspection and a follow-up letter, each requiring its own approval. Cards for the same facility are distinct actions on the same inspection, never duplicates (the store enforces one proposal set per inspection).
+
 ## The receipts: the future agreed with the triage
 
 We replayed Clayton County's own history to test whether the agent's judgment holds up. For 350 real (inspection, next inspection) pairs, live qwen-plus triaged each inspection using only information available at that time, and we then checked what actually happened at that facility's next real inspection:
@@ -31,6 +35,8 @@ Environmental health offices are chronically understaffed. Inspection results pi
 - **Every card shows its evidence.** The exact fact sheet the agent read is one click away on each proposal, so a supervisor (or a judge) can check any citation against the source.
 - **Automation is explicit.** Exactly one rule may bypass the queue (acknowledging a clean, high-scoring routine inspection), and the UI lists it.
 - **The system measures itself on screen.** The live trust strip shows agent-human agreement rate, citations dropped by the validator, and tier mix, straight from the append-only log.
+
+![Approved re-inspections become a dated, risk-ordered inspector schedule](docs/img/schedule.png)
 
 ## Measured, not assumed
 
