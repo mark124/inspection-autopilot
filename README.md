@@ -4,7 +4,7 @@ An autopilot agent for county food-safety operations, built on Qwen (Alibaba Clo
 
 Track 4 (Autopilot Agent), Global AI Hackathon Series with Qwen Cloud.
 
-**Live demo (Alibaba Cloud Singapore, live qwen-plus): http://47.82.181.199:8080** - click "Run agent" yourself; the approval queue, schedule, and trust metrics are all real.
+**Live demo (Alibaba Cloud Singapore, live qwen-plus): http://47.82.181.199:8080** - click "Run agent" yourself; the approval queue, schedule, and trust metrics are all real. [3-minute demo video](https://youtu.be/amJNuIgjwEw).
 
 ![Approval queue with outcome backtest tiles, trust strip, and a cited, letter-linted proposal](docs/img/approval-queue.png)
 

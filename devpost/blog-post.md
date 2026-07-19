@@ -30,3 +30,4 @@ Your demo should show a rejection, and your eval should show an attack on your o
 
 Repo (MIT): https://github.com/mark124/inspection-autopilot
 Live demo: http://47.82.181.199:8080
+Demo video: https://youtu.be/amJNuIgjwEw
