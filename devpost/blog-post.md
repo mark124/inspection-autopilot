@@ -29,4 +29,4 @@ Two structured-JSON passes per inspection through Model Studio's OpenAI-compatib
 Your demo should show a rejection, and your eval should show an attack on your own safety layer. The moment a human clicks "reject" and the system records it permanently is the moment the workflow becomes adoptable by an organization with actual liability. Autonomy you can't override is a liability; autonomy with a paper trail and measured guardrails is a product.
 
 Repo (MIT): https://github.com/mark124/inspection-autopilot
-Live demo: [link]
+Live demo: http://47.82.181.199:8080

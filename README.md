@@ -4,6 +4,8 @@ An autopilot agent for county food-safety operations, built on Qwen (Alibaba Clo
 
 Track 4 (Autopilot Agent), Global AI Hackathon Series with Qwen Cloud.
 
+**Live demo (Alibaba Cloud Singapore, live qwen-plus): http://47.82.181.199:8080** - click "Run agent" yourself; the approval queue, schedule, and trust metrics are all real.
+
 ## The receipts: the future agreed with the triage
 
 We replayed Clayton County's own history to test whether the agent's judgment holds up. For 350 real (inspection, next inspection) pairs, live qwen-plus triaged each inspection using only information available at that time, and we then checked what actually happened at that facility's next real inspection:
