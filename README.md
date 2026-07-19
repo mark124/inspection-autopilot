@@ -59,21 +59,21 @@ python -m evals.backtest_outcomes --sample 350      # outcome backtest (live onl
 
 ```mermaid
 flowchart LR
-    A[Inspection records\nGA DPH public data] --> B[Fact sheet builder]
-    B --> C[Qwen triage\nrisk tier + citations]
-    C --> D[Citation validator\ndeterministic, measured]
+    A[Inspection records<br/>GA DPH public data] --> B[Fact sheet builder]
+    B --> C[Qwen triage<br/>risk tier + citations]
+    C --> D[Citation validator<br/>deterministic, measured]
     D --> E[Qwen action drafter]
-    E --> L[Letter linter\ncodes vs record]
+    E --> L[Letter linter<br/>codes vs record]
     L --> F{Automation rule?}
     F -- clean routine only --> G[Auto-approved log entry]
     F -- everything else --> H[Human approval queue]
-    H --> I[(Append-only\ndecision log)]
+    H --> I[(Append-only<br/>decision log)]
     G --> I
-    I --> S[Re-inspection schedule\nrisk-ordered work queue]
+    I --> S[Re-inspection schedule<br/>risk-ordered work queue]
     subgraph Alibaba Cloud
         C
         E
-        J[Model Studio / DashScope\nqwen-plus]
+        J[Model Studio / DashScope<br/>qwen-plus]
     end
 ```
 
