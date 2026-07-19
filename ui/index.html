@@ -155,7 +155,13 @@ async function refresh() {
       renderSchedule((await j('/api/schedule')).schedule);
     } else {
       const q = tab === 'proposed' ? '?status=proposed' : '';
-      render((await j('/api/proposals' + q)).proposals);
+      const props = (await j('/api/proposals' + q)).proposals;
+      if (tab === 'proposed') {
+        // approval queue is risk-first; the action log stays chronological
+        const rank = {URGENT: 0, ELEVATED: 1, ROUTINE: 2};
+        props.sort((a, b) => (rank[a.risk_tier] ?? 9) - (rank[b.risk_tier] ?? 9) || b.proposal_id - a.proposal_id);
+      }
+      render(props);
     }
   } catch (e) {
     showError('Could not load data: ' + e.message);
