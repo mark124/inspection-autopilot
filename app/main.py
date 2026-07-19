@@ -136,7 +136,14 @@ def run_batch(batch: int = 5):
 
 @app.get("/api/proposals")
 def proposals(status: Optional[str] = None):
-    return {"proposals": [p.model_dump() for p in store.list_proposals(status)]}
+    out = []
+    for p in store.list_proposals(status):
+        d = p.model_dump()
+        insp = source.inspections.get(p.inspection_id)
+        d["score"] = insp.score if insp else None
+        d["inspection_date"] = insp.date if insp else None
+        out.append(d)
+    return {"proposals": out}
 
 
 @app.post("/api/proposals/{proposal_id}/decide")
@@ -176,10 +183,12 @@ def schedule():
         except ValueError:
             continue
         fac = source.facilities.get(p.facility_id)
+        insp = source.inspections.get(p.inspection_id)
         rows.append({"due_date": due, "risk_tier": p.risk_tier,
                      "facility_name": p.facility_name,
                      "address": fac.address if fac else "",
                      "window_days": window,
+                     "score": insp.score if insp else None,
                      "approved_by": p.decided_by or "automation rule",
                      "proposal_id": p.proposal_id})
     rows.sort(key=lambda r: (r["due_date"], tier_rank.get(r["risk_tier"], 9)))

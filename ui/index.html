@@ -46,6 +46,9 @@
           border-radius:99px; color:#fff; }
   .tier.URGENT { background:var(--urgent); } .tier.ELEVATED { background:var(--elevated); }
   .tier.ROUTINE { background:var(--routine); }
+  .score { font-size:12px; font-weight:700; padding:2px 9px; border-radius:99px;
+           background:#f1f3f5; border:1px solid var(--line); color:var(--ink); }
+  .score.bad { background:#fdecea; border-color:var(--urgent); color:var(--urgent); }
   .fac { font-weight:600; }
   .atype { font-family:Consolas, monospace; font-size:12px; color:var(--ink);
            background:#eef1f4; border:1px solid var(--line); border-radius:5px; padding:1px 8px; }
@@ -185,6 +188,7 @@ function render(props) {
     <div class="card">
       <div class="row1">
         <span class="tier ${p.risk_tier}">${p.risk_tier}</span>
+        ${p.score != null ? `<span class="score${p.score < 85 ? ' bad' : ''}">score ${Number(p.score)}</span>` : ''}
         <span class="fac">${esc(p.facility_name)}</span>
         <span class="atype">${esc(p.action_type)}${p.params && Number(p.params.window_days) ? ' (' + Number(p.params.window_days) + ' days)' : ''}</span>
         <span class="meta">insp #${p.inspection_id} · ${esc(p.source)}</span>
@@ -223,6 +227,7 @@ function renderSchedule(rows) {
     if (r.due_date !== lastDay) { lastDay = r.due_date; html += `<div class="dayhead">Due ${esc(r.due_date)}</div>`; }
     html += `<div class="srow${r.due_date < today ? ' overdue' : ''}">
       <span class="tier ${r.risk_tier}">${r.risk_tier}</span>
+      ${r.score != null ? `<span class="score${r.score < 85 ? ' bad' : ''}">score ${Number(r.score)}</span>` : ''}
       <span class="fac">${esc(r.facility_name)}</span>
       <span class="addr">${esc(r.address)}</span>
       <span class="due">${r.window_days}-day window · ${esc(r.approved_by)}</span>
