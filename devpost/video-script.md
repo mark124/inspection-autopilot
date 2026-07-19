@@ -51,7 +51,7 @@ Target 2:45, hard ceiling 3:00. Beats 1-6 sync all three sections. Flub a line? 
 8. On "citation copied verbatim": run the cursor slowly down the cited violation bullets.
 9. On "It drafted the enforcement letter": point at the gray letter box, then the green badge below it.
 10. On "the exact fact sheet": click **Source inspection record (what the agent read)**, let it expand, pause two seconds, click again to collapse.
-11. On "I'm approving": find Golden Krust's **schedule_reinspection** card (adjacent) and click **Approve**.
+11. On "I'm approving": on Golden Krust's SECOND card, click the button labeled **"Approve & schedule visit"** (that exact label; the letter card's button says "Approve letter" and does NOT feed the schedule).
 
 **Beat 4** (1:40-1:55)
 12. Click the **Re-inspection schedule** tab. Golden Krust is at the top under its due date.

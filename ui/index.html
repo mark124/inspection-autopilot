@@ -204,7 +204,9 @@ function render(props) {
       </details>
       ${p.status === 'proposed' ? `
       <div class="actions">
-        <button class="approve" onclick="decide(${p.proposal_id}, 'approved')">Approve</button>
+        <button class="approve" onclick="decide(${p.proposal_id}, 'approved')">${
+          p.action_type === 'schedule_reinspection' ? 'Approve & schedule visit'
+          : p.action_type === 'follow_up_letter' ? 'Approve letter' : 'Approve'}</button>
         <button class="reject" onclick="decide(${p.proposal_id}, 'rejected')">Reject</button>
       </div>` : ''}
     </div>`).join('');
