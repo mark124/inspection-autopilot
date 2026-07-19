@@ -91,7 +91,7 @@
 <main>
   <div class="outcomes" id="outcomes"></div>
   <div class="bar">
-    <button class="primary" id="runBtn" onclick="runBatch()">Run agent on next 5 inspections</button>
+    <button class="primary" id="runBtn" onclick="runBatch()" title="Sends the next 5 untriaged Clayton County inspections through live qwen-plus: risk triage plus drafted actions for each, then a deterministic citation check against the record. A batch typically takes 30-60 seconds.">Run agent on next 5 inspections</button>
     <span class="stats" id="runStatus"></span>
   </div>
   <div id="err" onclick="this.style.display='none'" title="click to dismiss"></div>
@@ -126,12 +126,15 @@ async function loadOutcomes() {
     const o = await j('/api/outcomes');
     const el = document.getElementById('outcomes');
     const tiers = ['URGENT', 'ELEVATED', 'ROUTINE'];
+    const base = Math.round(o.base_bad_rate * 100);
+    const u = o.tiers.URGENT, rt = o.tiers.ROUTINE;
+    const ratio = (u && rt && rt.next_inspection_bad_rate > 0)
+      ? (u.next_inspection_bad_rate / rt.next_inspection_bad_rate).toFixed(1) + 'x' : null;
     el.innerHTML = tiers.map(t => {
       const d = o.tiers[t]; if (!d) return '';
       return `<div class="otile ${t}"><div class="big">${Math.round(d.next_inspection_bad_rate * 100)}%</div>
-        <div class="lbl">of ${t} facilities failed their next real inspection (n=${d.n})</div></div>`;
-    }).join('') + `<div class="ocap">Outcome backtest: agent tiers vs the county's own history
-      (${o.n_pairs_triaged} real next-inspection pairs, base failure rate ${Math.round(o.base_bad_rate * 100)}%, live ${esc(o.model)}).</div>`;
+        <div class="lbl">of agent-tiered ${t} facilities failed their next real inspection (n=${d.n}, vs county base ${base}%)</div></div>`;
+    }).join('') + `<div class="ocap">Does the triage work? Facilities the agent tiered URGENT went on to fail ${ratio ? ratio + ' as often as' : 'far more often than'} ROUTINE ones. Backtest: ${o.n_pairs_triaged} real next-inspection pairs from the county's own history, tiers assigned by live ${esc(o.model)}. "Failed" = next inspection scored under 85 or had any priority violation.</div>`;
     el.style.display = 'flex';
   } catch (_) { /* backtest not generated yet */ }
 }
@@ -142,15 +145,19 @@ async function refresh() {
     const m = document.getElementById('mode');
     m.textContent = h.mode === 'live' ? ('LIVE: ' + h.model) : 'STUB MODE (no API key)';
     m.className = h.mode;
+    m.title = h.mode === 'live'
+      ? 'Every rationale and draft letter on this page is generated live by this model, not pre-canned.'
+      : 'No API key configured; responses are deterministic stubs.';
     const s = await j('/api/stats');
-    const agree = s.agreement_rate == null ? 'n/a' : Math.round(s.agreement_rate * 100) + '%';
+    const agree = s.agreement_rate == null ? 'pending first review' : Math.round(s.agreement_rate * 100) + '%';
     document.getElementById('chips').innerHTML =
+      `<span class="chip" style="border-color:transparent;background:transparent;padding-left:0;padding-right:0">This live session:</span>` +
       `<span class="chip"><b>${s.proposals}</b> proposals</span>` +
       `<span class="chip"><b>${s.pending}</b> pending review</span>` +
       `<span class="chip"><b>${s.human_decisions}</b> human decisions</span>` +
-      `<span class="chip"><b>${s.auto_approved}</b> auto-approved by rule</span>` +
-      `<span class="chip">human agreement <b>${agree}</b></span>` +
-      `<span class="chip">citations dropped by validator <b>${s.citations_dropped}</b></span>`;
+      `<span class="chip" title="Approved without a human by the deterministic rule shown below; everything else waits for supervisor review."><b>${s.auto_approved}</b> auto-approved by rule</span>` +
+      `<span class="chip" title="Share of agent proposals the human supervisor agreed with. Updates live after the first Approve or Reject in the queue below.">human agreement <b>${agree}</b></span>` +
+      `<span class="chip" title="Anti-hallucination guard: every violation the agent cites is cross-checked in code against the county inspection record; fabricated citations are stripped and counted here. 0 means none survived to a reviewer. The green letter badge on each card is this same check per letter.">hallucinated citations dropped by validator <b>${s.citations_dropped}</b></span>`;
     const rl = await j('/api/rules');
     document.getElementById('rules').textContent =
       'Active automation rules: ' + rl.rules.map(r => r.name + ' (' + r.description + ')').join('  |  ');
@@ -183,12 +190,18 @@ function lintBadge(p) {
 
 function render(props) {
   const el = document.getElementById('list');
-  if (!props.length) { el.innerHTML = '<div class="empty">Nothing here yet. Run the agent.</div>'; return; }
-  el.innerHTML = props.map(p => `
+  const cap = tab === 'all' ? '<div class="meta" style="margin-bottom:10px">Append-only audit trail: every agent proposal and every human decision, in order. Rows are insert-only; a decision is final and can never be edited or deleted.</div>' : '';
+  if (!props.length) {
+    el.innerHTML = cap + '<div class="empty">' + (tab === 'proposed'
+      ? 'No proposals waiting for review right now. Click "Run agent on next 5 inspections" to triage more, or open the Action log to see every decision made so far. (Clean routine inspections auto-approve by rule and skip this queue.)'
+      : 'No actions logged yet. Run the agent to triage the first inspections.') + '</div>';
+    return;
+  }
+  el.innerHTML = cap + props.map(p => `
     <div class="card">
       <div class="row1">
         <span class="tier ${p.risk_tier}">${p.risk_tier}</span>
-        ${p.score != null ? `<span class="score${p.score < 85 ? ' bad' : ''}">score ${Number(p.score)}</span>` : ''}
+        ${p.score != null ? `<span class="score${p.score < 85 ? ' bad' : ''}" title="County inspection score out of 100; higher is better. Under 85 shows red and counts as a failed outcome in the backtest.">score ${Number(p.score)}/100</span>` : ''}
         <span class="fac">${esc(p.facility_name)}</span>
         <span class="atype">${esc(p.action_type)}${p.params && Number(p.params.window_days) ? ' (' + Number(p.params.window_days) + ' days)' : ''}</span>
         <span class="meta">insp #${p.inspection_id} · ${esc(p.source)}</span>
@@ -204,10 +217,10 @@ function render(props) {
       </details>
       ${p.status === 'proposed' ? `
       <div class="actions">
-        <button class="approve" onclick="decide(${p.proposal_id}, 'approved')">${
+        <button class="approve" title="Final: recorded permanently in the append-only action log" onclick="decide(${p.proposal_id}, 'approved', '${p.action_type}')">${
           p.action_type === 'schedule_reinspection' ? 'Approve & schedule visit'
           : p.action_type === 'follow_up_letter' ? 'Approve letter' : 'Approve'}</button>
-        <button class="reject" onclick="decide(${p.proposal_id}, 'rejected')">Reject</button>
+        <button class="reject" title="Final: recorded permanently in the append-only action log" onclick="decide(${p.proposal_id}, 'rejected', '${p.action_type}')">Reject</button>
       </div>` : ''}
     </div>`).join('');
 }
@@ -229,7 +242,7 @@ function renderSchedule(rows) {
     if (r.due_date !== lastDay) { lastDay = r.due_date; html += `<div class="dayhead">Due ${esc(r.due_date)}</div>`; }
     html += `<div class="srow${r.due_date < today ? ' overdue' : ''}">
       <span class="tier ${r.risk_tier}">${r.risk_tier}</span>
-      ${r.score != null ? `<span class="score${r.score < 85 ? ' bad' : ''}">score ${Number(r.score)}</span>` : ''}
+      ${r.score != null ? `<span class="score${r.score < 85 ? ' bad' : ''}" title="County inspection score out of 100; higher is better. Under 85 shows red and counts as a failed outcome in the backtest.">score ${Number(r.score)}/100</span>` : ''}
       <span class="fac">${esc(r.facility_name)}</span>
       <span class="addr">${esc(r.address)}</span>
       <span class="due">${r.window_days}-day window · ${esc(r.approved_by)}</span>
@@ -238,11 +251,16 @@ function renderSchedule(rows) {
   el.innerHTML = html;
 }
 
-async function decide(id, decision) {
+async function decide(id, decision, atype) {
   try {
     await j('/api/proposals/' + id + '/decide', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({decision, decided_by: 'supervisor'})});
+    note(decision === 'rejected'
+      ? 'Rejected. Recorded permanently in the append-only Action log.'
+      : atype === 'schedule_reinspection'
+        ? 'Approved. A dated visit was added to the Re-inspection schedule tab.'
+        : 'Approved. Recorded permanently in the append-only Action log.');
   } catch (e) {
     if (e.status === 409) note('Already decided by another supervisor; refreshing.');
     else showError('Decision not recorded: ' + e.message);
@@ -252,7 +270,10 @@ async function decide(id, decision) {
 
 async function runBatch() {
   const b = document.getElementById('runBtn');
-  b.disabled = true; b.textContent = 'Agent running…';
+  const rs = document.getElementById('runStatus');
+  const busy = 'Calling qwen-plus live on the next 5 real Clayton County inspections... typically 30-60 seconds';
+  b.disabled = true; b.textContent = 'Agent running… (10 live qwen-plus calls)';
+  rs.textContent = busy;
   try {
     const r = await j('/api/run?batch=5', {method: 'POST'});
     if (r.n_errors) note(`${r.n_errors} inspection(s) hit a model error; the rest were queued. Click again to retry.`);
@@ -263,6 +284,7 @@ async function runBatch() {
     else showError('Agent run failed: ' + e.message);
   } finally {
     b.disabled = false; b.textContent = 'Run agent on next 5 inspections';
+    if (rs.textContent === busy) rs.textContent = '';
   }
   refresh();
 }
