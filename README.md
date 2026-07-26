@@ -32,6 +32,8 @@ Environmental health offices are chronically understaffed. Inspection results pi
 - **The agent proposes, a person disposes.** Every re-inspection and every letter sits in an approval queue until a supervisor approves or rejects it. Decisions are final and append-only.
 - **Citations are verified in code.** Every triage rationale must cite violation lines copied verbatim from the record (whole line or a substantial 20+ character fragment). Non-matching citations are dropped and counted, so the hallucination rate is measured, not assumed.
 - **Letters are machine-cross-checked.** A deterministic linter verifies every violation code a drafted letter names against the official record and badges any mismatch right above the Approve button.
+
+![Drafted enforcement letters with per-letter cross-check badges and per-action approval buttons](docs/img/letters.png)
 - **Every card shows its evidence.** The exact fact sheet the agent read is one click away on each proposal, so a supervisor (or a judge) can check any citation against the source.
 - **Automation is explicit.** Exactly one rule may bypass the queue (acknowledging a clean, high-scoring routine inspection), and the UI lists it.
 - **The system measures itself on screen.** The live trust strip shows agent-human agreement rate, citations dropped by the validator, and tier mix, straight from the append-only log.
